@@ -11,6 +11,7 @@ function App() {
   const [, setPdfFile] = useState<File | null>(null)
   const [pdfBytes, setPdfBytes] = useState<Uint8Array | null>(null)
   const [pdfPageDimensions, setPdfPageDimensions] = useState<{ width: number; height: number } | null>(null)
+  const [previewPdfBytes, setPreviewPdfBytes] = useState<Uint8Array | null>(null)
 
   // Template configuration
   const [font, setFont] = useState('Sarabun-Regular.ttf')
@@ -70,6 +71,72 @@ function App() {
     }
   }
 
+  const handleImportJSON = async (file: File) => {
+    try {
+      const text = await file.text()
+      const config: PDFTemplateConfig = JSON.parse(text)
+
+      // Validate the JSON structure
+      if (!config.pages || !Array.isArray(config.pages) || config.pages.length === 0) {
+        throw new Error('Invalid JSON: Missing or empty pages array')
+      }
+
+      // Update font if present
+      if (config.font) {
+        setFont(config.font)
+      }
+
+      // Convert first page items to DraggableElements
+      const firstPageItems = config.pages[0]
+      const newElements: DraggableElement[] = firstPageItems
+        .filter(item => item.type === 'text')
+        .map((item) => {
+          const textItem = item as TextItemConfig
+          return {
+            id: crypto.randomUUID(),
+            type: 'text' as const,
+            path: textItem.path,
+            x: textItem.x,
+            y: textItem.y,
+            maxWidth: textItem.maxWidth,
+            handleMaxWidth: textItem.handleMaxWidth,
+            align: textItem.align,
+            wordBreak: textItem.wordBreak,
+            size: textItem.size,
+            lineHeight: textItem.lineHeight,
+            sampleText: config.defaultValues?.[textItem.path] || ''
+          }
+        })
+
+      setElements(newElements)
+      setSelectedElementId(null)
+
+      alert(`Successfully imported ${newElements.length} elements from template`)
+    } catch (error) {
+      console.error('Failed to import JSON:', error)
+      alert('Failed to import JSON. Please check that the file is a valid template configuration.')
+    }
+  }
+
+  const handleExportPDF = () => {
+    if (!previewPdfBytes) {
+      alert('No PDF preview available. Please add some sample text to elements first.')
+      return
+    }
+
+    const blob = new Blob([previewPdfBytes], { type: 'application/pdf' })
+    const url = URL.createObjectURL(blob)
+
+    const a = document.createElement('a')
+    a.href = url
+    const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, -5)
+    a.download = 'preview-' + timestamp + '.pdf'
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    URL.revokeObjectURL(url)
+  }
+
   const handleExportJSON = () => {
     const pageItems: PageItem[] = elements.map(el => {
       const item: TextItemConfig = {
@@ -116,11 +183,11 @@ function App() {
   return (
     <div className="h-screen flex flex-col">
       <Toolbar
-        onPDFUpload={handlePDFUpload}
         font={font}
         onFontChange={setFont}
-        onAddTextElement={handleAddTextElement}
         onExportJSON={handleExportJSON}
+        onExportPDF={handleExportPDF}
+        onImportJSON={handleImportJSON}
         hasElements={elements.length > 0}
       />
 
@@ -131,6 +198,8 @@ function App() {
           onElementUpdate={handleElementUpdate}
           onElementDelete={handleElementDelete}
           onElementSelect={setSelectedElementId}
+          onAddElement={handleAddTextElement}
+          hasPdf={pdfBytes !== null}
         />
 
         <PDFCanvas
@@ -138,6 +207,8 @@ function App() {
           elements={elements}
           pdfPageDimensions={pdfPageDimensions}
           canvasScale={canvasScale}
+          onPreviewPdfUpdate={setPreviewPdfBytes}
+          onPDFUpload={handlePDFUpload}
         />
       </div>
     </div>

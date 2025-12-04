@@ -1,26 +1,37 @@
-import React from 'react'
+import React, { useState } from 'react'
 
 interface ToolbarProps {
-  onPDFUpload: (file: File) => void
   font: string
   onFontChange: (font: string) => void
-  onAddTextElement: () => void
   onExportJSON: () => void
+  onExportPDF: () => void
+  onImportJSON: (file: File) => void
   hasElements: boolean
 }
 
 export const Toolbar: React.FC<ToolbarProps> = ({
-  onPDFUpload,
   font,
   onFontChange,
-  onAddTextElement,
   onExportJSON,
+  onExportPDF,
+  onImportJSON,
   hasElements
 }) => {
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const [showExportMenu, setShowExportMenu] = useState(false)
+
+  const handleJSONImport = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
-    if (file && file.type === 'application/pdf') {
-      onPDFUpload(file)
+    if (file && file.type === 'application/json') {
+      onImportJSON(file)
+    }
+  }
+
+  const handleExportClick = (type: 'json' | 'pdf') => {
+    setShowExportMenu(false)
+    if (type === 'json') {
+      onExportJSON()
+    } else {
+      onExportPDF()
     }
   }
 
@@ -36,19 +47,6 @@ export const Toolbar: React.FC<ToolbarProps> = ({
           </h1>
         </div>
 
-        <div className="h-8 w-px bg-slate-600" />
-
-        <label className="flex items-center gap-2 px-5 py-2.5 bg-blue-600 hover:bg-blue-700 rounded-lg cursor-pointer transition-all hover:shadow-lg hover:scale-105 font-medium">
-          <span className="text-lg">📁</span>
-          <span>Upload PDF</span>
-          <input
-            type="file"
-            accept=".pdf"
-            onChange={handleFileChange}
-            className="hidden"
-          />
-        </label>
-
         <div className="flex items-center gap-2">
           <label className="text-sm text-slate-300 font-medium">Font:</label>
           <select
@@ -61,23 +59,62 @@ export const Toolbar: React.FC<ToolbarProps> = ({
           </select>
         </div>
 
-        <button
-          onClick={onAddTextElement}
-          className="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 rounded-lg transition-all hover:shadow-lg hover:scale-105 font-medium disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100"
-          disabled={!hasElements && hasElements !== false}
-        >
-          <span className="text-lg mr-1">+</span> Add Text Element
-        </button>
-
         <div className="flex-1" />
 
-        <button
-          onClick={onExportJSON}
-          className="px-6 py-2.5 bg-linear-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 rounded-lg transition-all hover:shadow-lg hover:shadow-purple-500/50 hover:scale-105 font-medium disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100"
-          disabled={!hasElements}
-        >
-          <span className="text-lg mr-1">💾</span> Export JSON
-        </button>
+        <label className="flex items-center gap-2 px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 rounded-lg cursor-pointer transition-all hover:shadow-lg hover:scale-105 font-medium">
+          <span className="text-lg">📥</span>
+          <span>Import JSON</span>
+          <input
+            type="file"
+            accept=".json"
+            onChange={handleJSONImport}
+            className="hidden"
+          />
+        </label>
+
+        <div className="relative">
+          <button
+            onClick={() => setShowExportMenu(!showExportMenu)}
+            className="flex items-center gap-2 px-6 py-2.5 bg-linear-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 rounded-lg transition-all hover:shadow-lg hover:shadow-purple-500/50 hover:scale-105 font-medium disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100"
+            disabled={!hasElements}
+          >
+            <span className="text-lg">💾</span>
+            <span>Export</span>
+            <span className="text-lg">▼</span>
+          </button>
+
+          {showExportMenu && hasElements && (
+            <>
+              <div
+                className="fixed inset-0 z-10"
+                onClick={() => setShowExportMenu(false)}
+              />
+              <div className="absolute right-0 mt-2 w-56 bg-white rounded-lg shadow-xl border border-slate-200 overflow-hidden z-20">
+                <button
+                  onClick={() => handleExportClick('json')}
+                  className="w-full flex items-center gap-3 px-4 py-3 hover:bg-purple-50 transition-colors text-left text-slate-700 hover:text-purple-700"
+                >
+                  <span className="text-lg">📋</span>
+                  <div>
+                    <div className="font-semibold">Export JSON</div>
+                    <div className="text-xs text-slate-500">Template configuration</div>
+                  </div>
+                </button>
+                <div className="h-px bg-slate-200" />
+                <button
+                  onClick={() => handleExportClick('pdf')}
+                  className="w-full flex items-center gap-3 px-4 py-3 hover:bg-green-50 transition-colors text-left text-slate-700 hover:text-green-700"
+                >
+                  <span className="text-lg">📄</span>
+                  <div>
+                    <div className="font-semibold">Export PDF</div>
+                    <div className="text-xs text-slate-500">Preview with sample text</div>
+                  </div>
+                </button>
+              </div>
+            </>
+          )}
+        </div>
       </div>
     </div>
   )

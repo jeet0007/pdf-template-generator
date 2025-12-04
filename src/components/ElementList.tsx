@@ -7,6 +7,8 @@ interface ElementListProps {
   onElementUpdate: (id: string, updates: Partial<TextItemConfig>) => void
   onElementDelete: (id: string) => void
   onElementSelect: (id: string) => void
+  onAddElement: () => void
+  hasPdf: boolean
 }
 
 export const ElementList: React.FC<ElementListProps> = ({
@@ -14,14 +16,27 @@ export const ElementList: React.FC<ElementListProps> = ({
   selectedElementId,
   onElementUpdate,
   onElementDelete,
-  onElementSelect
+  onElementSelect,
+  onAddElement,
+  hasPdf
 }) => {
   if (elements.length === 0) {
     return (
       <div className="w-96 bg-slate-50 border-r border-slate-200 p-6">
-        <div className="flex items-center gap-2 mb-4">
-          <span className="text-2xl">📝</span>
-          <h2 className="text-xl font-bold text-slate-800">Text Elements</h2>
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center gap-2">
+            <span className="text-2xl">📝</span>
+            <h2 className="text-xl font-bold text-slate-800">Text Elements</h2>
+          </div>
+          <button
+            onClick={onAddElement}
+            disabled={!hasPdf}
+            className="w-8 h-8 flex items-center justify-center bg-emerald-500 hover:bg-emerald-600 text-white rounded-lg transition-all hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:shadow-none font-bold text-lg relative z-10"
+            title="Add Text Element"
+            type="button"
+          >
+            +
+          </button>
         </div>
         <div className="bg-white rounded-lg p-6 border-2 border-dashed border-slate-300 text-center">
           <div className="text-4xl mb-3">📭</div>
@@ -43,6 +58,15 @@ export const ElementList: React.FC<ElementListProps> = ({
           <span className="ml-auto bg-blue-500 text-white text-xs font-bold px-2.5 py-1 rounded-full">
             {elements.length}
           </span>
+          <button
+            onClick={onAddElement}
+            disabled={!hasPdf}
+            className="w-8 h-8 flex items-center justify-center bg-emerald-500 hover:bg-emerald-600 text-white rounded-lg transition-all hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:shadow-none font-bold text-lg relative z-10"
+            title="Add Text Element"
+            type="button"
+          >
+            +
+          </button>
         </div>
 
         <div className="space-y-3 mb-6">
