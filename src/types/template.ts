@@ -1,3 +1,4 @@
+// Types matching the PDF service expectations
 export interface TextItemConfig {
   type: 'text'
   path: string
@@ -32,23 +33,8 @@ export interface PDFTemplateConfig {
   pages: PageItem[][]
 }
 
+// UI-specific types
 export interface DraggableElement extends TextItemConfig {
   id: string
-}
-
-export interface AppState {
-  // PDF data
-  pdfFile: File | null
-  pdfBytes: Uint8Array | null
-  pdfPageDimensions: { width: number; height: number } | null
-
-  // Template configuration
-  templateConfig: PDFTemplateConfig
-
-  // UI state
-  elements: DraggableElement[]
-  selectedElementId: string | null
-
-  // Canvas state
-  canvasScale: number
+  sampleText?: string  // Sample text for preview
 }

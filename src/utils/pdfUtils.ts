@@ -1,95 +1,145 @@
-import { PDFDocument } from 'pdf-lib'
+import { PDFDocument, rgb, StandardFonts } from 'pdf-lib'
+import * as pdfjsLib from 'pdfjs-dist'
+import type { DraggableElement } from '../types/template'
 
-/**
- * Load PDF from file and return bytes
- */
-export async function loadPDFFromFile(file: File): Promise<Uint8Array> {
+// Set worker source for PDF.js - using local worker from node_modules
+pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
+  'pdfjs-dist/build/pdf.worker.min.mjs',
+  import.meta.url
+).toString()
+
+export interface PDFLoadResult {
+  bytes: Uint8Array
+  doc: PDFDocument
+  firstPageDimensions: { width: number; height: number }
+}
+
+export async function loadPDF(file: File): Promise<PDFLoadResult> {
   const arrayBuffer = await file.arrayBuffer()
-  return new Uint8Array(arrayBuffer)
-}
+  const bytes = new Uint8Array(arrayBuffer)
+  const doc = await PDFDocument.load(bytes)
 
-/**
- * Get PDF page dimensions
- */
-export async function getPDFPageDimensions(
-  pdfBytes: Uint8Array, 
-  pageIndex: number = 0
-): Promise<{ width: number; height: number }> {
-  const pdfDoc = await PDFDocument.load(pdfBytes)
-  const pages = pdfDoc.getPages()
-  
-  if (pageIndex >= pages.length) {
-    throw new Error(`Page ${pageIndex} does not exist. PDF has ${pages.length} pages.`)
+  const pages = doc.getPages()
+  const firstPage = pages[0]
+  const { width, height } = firstPage.getSize()
+
+  return {
+    bytes,
+    doc,
+    firstPageDimensions: { width, height }
   }
-  
-  const page = pages[pageIndex]
-  const { width, height } = page.getSize()
-  
-  return { width, height }
 }
 
-/**
- * Render PDF page to canvas
- */
 export async function renderPDFToCanvas(
-  pdfBytes: Uint8Array,
+  bytes: Uint8Array,
   canvas: HTMLCanvasElement,
-  pageIndex: number = 0,
-  scale: number = 1
+  pageNumber: number = 1
 ): Promise<void> {
-  const pdfDoc = await PDFDocument.load(pdfBytes)
-  const pages = pdfDoc.getPages()
-  
-  if (pageIndex >= pages.length) {
-    throw new Error(`Page ${pageIndex} does not exist. PDF has ${pages.length} pages.`)
+  // Load PDF document with PDF.js
+  const loadingTask = pdfjsLib.getDocument({ data: bytes })
+  const pdf = await loadingTask.promise
+
+  // Get the first page
+  const page = await pdf.getPage(pageNumber)
+
+  // Get viewport at scale 1
+  const viewport = page.getViewport({ scale: 1 })
+
+  // Set canvas dimensions to match PDF page
+  canvas.width = viewport.width
+  canvas.height = viewport.height
+
+  // Render PDF page into canvas context
+  const context = canvas.getContext('2d')!
+  const renderContext = {
+    canvasContext: context,
+    viewport: viewport,
+    canvas: canvas
   }
-  
-  const page = pages[pageIndex]
-  const { width, height } = page.getSize()
-  
-  // Set canvas dimensions
-  canvas.width = width * scale
-  canvas.height = height * scale
-  
-  const ctx = canvas.getContext('2d')
-  if (!ctx) {
-    throw new Error('Could not get canvas context')
-  }
-  
-  // Clear canvas
-  ctx.clearRect(0, 0, canvas.width, canvas.height)
-  
-  // For now, we'll create a simple placeholder
-  // In a real implementation, you'd use a PDF rendering library like PDF.js
-  ctx.fillStyle = '#f8f9fa'
-  ctx.fillRect(0, 0, canvas.width, canvas.height)
-  
-  // Draw border
-  ctx.strokeStyle = '#dee2e6'
-  ctx.lineWidth = 1
-  ctx.strokeRect(0, 0, canvas.width, canvas.height)
-  
-  // Add text to indicate this is a PDF preview
-  ctx.fillStyle = '#6c757d'
-  ctx.font = '16px Arial'
-  ctx.textAlign = 'center'
-  ctx.fillText(
-    `PDF Page ${pageIndex + 1}`,
-    canvas.width / 2,
-    canvas.height / 2
-  )
-  ctx.fillText(
-    `${Math.round(width)} x ${Math.round(height)}`,
-    canvas.width / 2,
-    canvas.height / 2 + 20
-  )
+
+  await page.render(renderContext).promise
 }
 
-/**
- * Convert PDF bytes to data URL for simple display
- * Note: This is a simplified approach. For production, consider using PDF.js
- */
-export function createPDFDataURL(pdfBytes: Uint8Array): string {
-  const blob = new Blob([pdfBytes], { type: 'application/pdf' })
-  return URL.createObjectURL(blob)
+export async function renderPDFWithText(
+  originalBytes: Uint8Array,
+  elements: DraggableElement[]
+): Promise<Uint8Array> {
+  // Load the PDF
+  const pdfDoc = await PDFDocument.load(originalBytes)
+  const pages = pdfDoc.getPages()
+  const firstPage = pages[0]
+
+  // Embed a standard font
+  const font = await pdfDoc.embedFont(StandardFonts.Helvetica)
+
+  // Draw each text element
+  for (const element of elements) {
+    if (element.sampleText && element.sampleText.trim()) {
+      const fontSize = element.size || 10
+      const text = element.sampleText
+
+      // Handle text wrapping if maxWidth is set
+      if (element.maxWidth && element.handleMaxWidth) {
+        const words = element.wordBreak ? text.split('') : text.split(' ')
+        let currentLine = ''
+        let yOffset = 0
+        const lineHeight = element.lineHeight || fontSize * 1.2
+
+        for (const word of words) {
+          const testLine = currentLine + (currentLine ? (element.wordBreak ? '' : ' ') : '') + word
+          const textWidth = font.widthOfTextAtSize(testLine, fontSize)
+
+          if (textWidth > element.maxWidth && currentLine) {
+            // Draw current line
+            drawText(firstPage, font, currentLine, element, fontSize, yOffset)
+            currentLine = word
+            yOffset += lineHeight
+          } else {
+            currentLine = testLine
+          }
+        }
+
+        // Draw remaining text
+        if (currentLine) {
+          drawText(firstPage, font, currentLine, element, fontSize, yOffset)
+        }
+      } else {
+        // Draw single line
+        drawText(firstPage, font, text, element, fontSize, 0)
+      }
+    }
+  }
+
+  // Save the PDF
+  const modifiedBytes = await pdfDoc.save()
+  return modifiedBytes
+}
+
+function drawText(
+  page: any,
+  font: any,
+  text: string,
+  element: DraggableElement,
+  fontSize: number,
+  yOffset: number
+) {
+  let x = element.x
+  const y = element.y - yOffset
+
+  // Handle alignment
+  if (element.align === 'center' && element.maxWidth) {
+    const textWidth = font.widthOfTextAtSize(text, fontSize)
+    x = element.x + (element.maxWidth - textWidth) / 2
+  } else if (element.align === 'right' && element.maxWidth) {
+    const textWidth = font.widthOfTextAtSize(text, fontSize)
+    x = element.x + element.maxWidth - textWidth
+  }
+
+  page.drawText(text, {
+    x,
+    y,
+    size: fontSize,
+    font,
+    color: rgb(0, 0, 0)
+  })
 }
